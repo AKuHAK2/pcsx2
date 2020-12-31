@@ -13,12 +13,12 @@
  *  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <libusb-1.0/libusb.h>
+
 #include "PrecompiledHeader.h"
 #include "Global.h"
 #include "InputManager.h"
 #include "PADConfig.h"
-
-#include "usb.h"
 #include "HidDevice.h"
 
 
@@ -39,74 +39,23 @@
 #define UPDATE_INTERVAL 3000
 
 unsigned int lastDS3Check = 0;
-unsigned int lastDS3Enum = 0;
-
-typedef void(__cdecl* _usb_init)(void);
-typedef int(__cdecl* _usb_close)(usb_dev_handle* dev);
-typedef int(__cdecl* _usb_get_string_simple)(usb_dev_handle* dev, int index, char* buf, size_t buflen);
-typedef usb_dev_handle*(__cdecl* _usb_open)(struct usb_device* dev);
-typedef int(__cdecl* _usb_find_busses)(void);
-typedef int(__cdecl* _usb_find_devices)(void);
-typedef struct usb_bus*(__cdecl* _usb_get_busses)(void);
-typedef usb_dev_handle*(__cdecl* _usb_open)(struct usb_device* dev);
-typedef int(__cdecl* _usb_control_msg)(usb_dev_handle* dev, int requesttype, int request, int value, int index, char* bytes, int size, int timeout);
-
-_usb_init pusb_init;
-_usb_close pusb_close;
-_usb_get_string_simple pusb_get_string_simple;
-_usb_open pusb_open;
-_usb_find_busses pusb_find_busses;
-_usb_find_devices pusb_find_devices;
-_usb_get_busses pusb_get_busses;
-_usb_control_msg pusb_control_msg;
-
-HMODULE hModLibusb = 0;
 
 void UninitLibUsb()
 {
-	if (hModLibusb)
-	{
-		FreeLibrary(hModLibusb);
-		hModLibusb = 0;
-	}
 }
 
-void TryInitDS3(usb_device* dev)
+void TryInitDS3(libusb_device* dev)
 {
-	while (dev)
+	libusb_device_handle* handle;
+	int err = libusb_open(dev, &handle);
+	if (err == LIBUSB_SUCCESS)
 	{
-		if (dev->descriptor.idVendor == VID && dev->descriptor.idProduct == PID)
-		{
-			usb_dev_handle* handle = pusb_open(dev);
-			if (handle)
-			{
-				char junk[20];
-				// This looks like HidD_GetFeature with a feature report id of 0xF2 to me and a length of 17.
-				// That doesn't work, however, and 17 is shorter than the report length.
-				pusb_control_msg(handle, 0xa1, 1, 0x03f2, dev->config->interface->altsetting->bInterfaceNumber, junk, 17, 1000);
-				pusb_close(handle);
-			}
-		}
-		if (dev->num_children)
-		{
-			for (int i = 0; i < dev->num_children; i++)
-			{
-				TryInitDS3(dev->children[i]);
-			}
-		}
-		dev = dev->next;
+		char junk[20];
+		// This looks like HidD_GetFeature with a feature report id of 0xF2 to me and a length of 17.
+		// That doesn't work, however, and 17 is shorter than the report length.
+		pusb_control_msg(handle, 0xa1, 1, 0x03f2, dev->config->interface->altsetting->bInterfaceNumber, junk, 17, 1000);
+		pusb_close(handle);
 	}
-}
-
-void DS3Enum(unsigned int time)
-{
-	if (time - lastDS3Enum < DOUBLE_ENUM_DELAY)
-	{
-		return;
-	}
-	lastDS3Enum = time;
-	pusb_find_busses();
-	pusb_find_devices();
 }
 
 void DS3Check(unsigned int time)
@@ -115,44 +64,30 @@ void DS3Check(unsigned int time)
 	{
 		return;
 	}
-	if (!lastDS3Check)
-	{
-		DS3Enum(time);
-	}
 	lastDS3Check = time;
 
-	usb_bus* bus = pusb_get_busses();
-	while (bus)
+	libusb_device** list;
+	ssize_t count = libusb_get_device_list(NULL, &list);
+	if (count < 0)
 	{
-		TryInitDS3(bus->devices);
-		bus = bus->next;
+		return;
+	}
+
+	for (size_t i = 0; i < count; i++)
+	{
+		libusb_device* device = list[i];
+		libusb_device_descriptor desc = {0};
+		if (libusb_get_device_descriptor(device, &desc) == 0
+			&& desc.idVendor == VID && desc.idProduct == PID)
+		{
+			TryInitDS3(device);
+		}
 	}
 }
 
 int InitLibUsb()
 {
-	if (hModLibusb)
-	{
-		return 1;
-	}
-	hModLibusb = LoadLibraryA("C:\\windows\\system32\\libusb0.dll");
-	if (hModLibusb)
-	{
-		if ((pusb_init = (_usb_init)GetProcAddress(hModLibusb, "usb_init")) &&
-			(pusb_close = (_usb_close)GetProcAddress(hModLibusb, "usb_close")) &&
-			(pusb_get_string_simple = (_usb_get_string_simple)GetProcAddress(hModLibusb, "usb_get_string_simple")) &&
-			(pusb_open = (_usb_open)GetProcAddress(hModLibusb, "usb_open")) &&
-			(pusb_find_busses = (_usb_find_busses)GetProcAddress(hModLibusb, "usb_find_busses")) &&
-			(pusb_find_devices = (_usb_find_devices)GetProcAddress(hModLibusb, "usb_find_devices")) &&
-			(pusb_get_busses = (_usb_get_busses)GetProcAddress(hModLibusb, "usb_get_busses")) &&
-			(pusb_control_msg = (_usb_control_msg)GetProcAddress(hModLibusb, "usb_control_msg")))
-		{
-			pusb_init();
-			return 1;
-		}
-		UninitLibUsb();
-	}
-	return 0;
+	return 1;
 }
 
 int DualShock3Possible()
@@ -437,10 +372,6 @@ public:
 			{
 				if (time - dataLastReceived >= DEVICE_CHECK_DELAY)
 				{
-					if (time - dataLastReceived >= DEVICE_ENUM_DELAY)
-					{
-						DS3Enum(time);
-					}
 					DS3Check(time);
 					QueueWrite();
 				}
