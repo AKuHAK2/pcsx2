@@ -371,6 +371,7 @@ extern void __Log( const char* fmt, ... );
 #define HW_LOG			macTrace(EE.KnownHw)
 #define UnknownHW_LOG	macTrace(EE.UnknownHw)
 #define DMA_LOG			macTrace(EE.DMAhw)
+// #define IPU_LOG(...)	do { printf(__VA_ARGS__); printf("\n"); } while (0)
 #define IPU_LOG			macTrace(EE.IPU)
 #define VIF_LOG			macTrace(EE.VIF)
 #define SPR_LOG			macTrace(EE.SPR)

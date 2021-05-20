@@ -322,6 +322,40 @@ namespace usb_eyetoy
 	{
 		EYETOYState* s = (EYETOYState*)dev;
 		int ret = 0;
+		/*
+		static int type = 0; // 1=i2c write ; 2=i2c read
+		if (index == 0x42)        type = 1;
+		else if (index == 0x43)   type = 2;
+		else if (index == 0x45 || index == 0x47);
+		else                      type = 0;
+
+		if (request == 0x4001 || request == 0xc001)
+		{
+			if (request == 0x4001 && type == 0)
+				fprintf(stderr, "\t reg_write(dev_handle, 0x%02x, 0x%02x);\n", index, data[0]);
+			else if (request == 0xc001 && type == 0)
+				fprintf(stderr, "\t reg_read(dev_handle, 0x%02x, 0x%02x);\n", index, data[0]);
+
+			else if (type == 1 && index == 0x42)
+				fprintf(stderr, "\t i2c_write(dev_handle, 0x%02x", data[0]);
+			else if (type == 1 && index == 0x45)
+				fprintf(stderr, ", 0x%02x);\n", data[0]);
+
+			else if (type == 2 && index == 0x43)
+				fprintf(stderr, "\t i2c_read(dev_handle, 0x%02x", data[0]);
+			else if (type == 2 && index == 0x45)
+				fprintf(stderr, ", 0x%02x);\n", data[0]);
+		}
+		else
+		{
+			fprintf(stderr, "ctrl: %02x, %02x, %02x [", request, value, index);
+			for (int i = 0; i < length; i++)
+			{
+				fprintf(stderr, "%02x ", data[i]);
+			}
+			fprintf(stderr, "]\n");
+		}
+		//*/
 
 		ret = usb_desc_handle_control(dev, p, request, value, index, length, data);
 		if (ret >= 0)
@@ -483,6 +517,15 @@ namespace usb_eyetoy
 						s->frame_step = 0;
 					}
 
+					/*
+					Console.WriteLn("EyeToy : %02x %02x %02x %02x  %02x %02x %02x %02x  %02x %02x %02x %02x  %02x %02x %02x %02x  %02x %02x %02x %02x",
+						data[0], data[1], data[2], data[3],
+						data[4], data[5], data[6], data[7],
+						data[8], data[9], data[10], data[11],
+						data[12], data[13], data[14], data[15],
+						data[16], data[17], data[18], data[19]
+					);
+					//*/
 					usb_packet_copy(p, data, max_ep_size);
 				}
 				else if (devep == 2)
@@ -503,7 +546,7 @@ namespace usb_eyetoy
 	static void eyetoy_handle_destroy(USBDevice* dev)
 	{
 		EYETOYState* s = (EYETOYState*)dev;
-
+		Console.Error("EyeToy : eyetoy_handle_destroy(); hw=%d", s->hw_camera_running);
 		delete s;
 	}
 
@@ -609,6 +652,7 @@ namespace usb_eyetoy
 
 	int EyeToyWebCamDevice::Freeze(FreezeAction mode, USBDevice* dev, void* data)
 	{
+		Console.Error("EyeToy : Freeze(mode=%d)", mode);
 		/*switch (mode)
 	{
 		case FREEZE_LOAD:
