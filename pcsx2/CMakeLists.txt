@@ -1602,6 +1602,7 @@ endif()
 
 target_link_libraries(PCSX2_FLAGS INTERFACE
 	common
+	des
 	imgui
 	fmt::fmt
 	ryml
@@ -1710,6 +1711,7 @@ target_include_directories(PCSX2_FLAGS INTERFACE
 	${CMAKE_BINARY_DIR}/common/include/
 	"${CMAKE_SOURCE_DIR}/3rdparty/jpgd/"
 	"${CMAKE_SOURCE_DIR}/3rdparty/xbyak/"
+	"${CMAKE_SOURCE_DIR}/3rdparty/des/"
 )
 
 if(COMMAND target_precompile_headers)
